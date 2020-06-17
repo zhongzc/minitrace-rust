@@ -65,31 +65,29 @@ fn trace_multi_thread(c: &mut Criterion) {
     c.bench_function_over_inputs(
         "per_thread_collect",
         |b, thread_cnt| {
-            b.iter(|| {
+            b.iter_batched(|| {}, |_| {
                 let (root, collector) = minitrace::trace_enable(0u32);
-
-                let mut threads = Vec::with_capacity(*thread_cnt);
+                let wg = crossbeam::sync::WaitGroup::new();
 
                 for i in 0..*thread_cnt {
                     let handle = minitrace::trace_crossthread(i as u32);
-                    let join_handle = std::thread::spawn(move || {
+                    let wg = wg.clone();
+                    std::thread::spawn(move || {
                         let mut handle = handle;
                         let _g = handle.trace_enable();
 
-                        for i in 0..1000 {
+                        for i in 0..10000 {
                             let _g = minitrace::new_span(i as u32);
                         }
+                        drop(wg);
                     });
-                    threads.push(join_handle);
                 }
 
-                for handle in threads {
-                    let _ = handle.join();
-                }
+                wg.wait();
 
                 drop(root);
                 let _span_sets = collector.collect();
-            });
+            }, criterion::BatchSize::NumIterations(1));
         },
         vec![4, 8, 16, 32],
     );
