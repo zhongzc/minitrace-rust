@@ -74,8 +74,6 @@ enum TracingType {
 }
 
 fn tracing_comparison(c: &mut Criterion) {
-    init_opentelemetry();
-
     c.bench_function_over_inputs(
         "tracing_comparison",
         |b, tp| {
@@ -93,5 +91,69 @@ fn tracing_comparison(c: &mut Criterion) {
     );
 }
 
-criterion_group!(benches, tracing_comparison);
+fn rustracing_multi(c: &mut Criterion) {
+    c.bench_function_over_inputs(
+        "rustracing_multi",
+        |b, thread_cnt| {
+            b.iter(|| {
+                let cnt = 1000;
+                let (span_tx, span_rx) = crossbeam::channel::bounded(*thread_cnt * cnt);
+                let tracer = rustracing::Tracer::with_sender(rustracing::sampler::AllSampler, span_tx);
+                let parent_span = std::sync::Arc::new(tracer.span("parent").start_with_state(()));
+            
+                for _ in 0..*thread_cnt {
+                    let parent_span = parent_span.clone();
+                    std::thread::spawn(move || {
+                        for _ in 0..cnt {
+                            let _child_span = parent_span.child("child", |c| c.start_with_state(()));
+                        }
+                    });
+                }
+
+                drop(parent_span);
+                drop(tracer);
+                let _r = span_rx.iter().collect::<Vec<_>>();
+            });
+        },
+        vec![4, 8, 16, 32],
+    );
+}
+
+fn tokio_tracing_multi(c: &mut Criterion) {
+    init_opentelemetry();
+
+    #[tracing::instrument]
+    async fn f() {
+        for _ in 0..1000 {
+            let child = tracing::info_span!("child");
+            let _enter = child.enter();
+        }
+    }
+
+    c.bench_function_over_inputs(
+        "tokio_tracing_multi",
+        |b, thread_cnt| {
+            b.iter(|| {
+                let wg = crossbeam::sync::WaitGroup::new();
+
+                let root = tracing::info_span!("parent");
+                let _enter = root.enter();
+
+                for _ in 0..*thread_cnt {
+                    let wg = wg.clone();
+
+                    std::thread::spawn(move || {
+                        futures_03::executor::block_on(f());
+                        drop(wg);
+                    });
+                }
+
+                wg.wait();
+            });
+        },
+        vec![4, 8, 16, 32],
+    );
+}
+
+criterion_group!(benches, tracing_comparison, rustracing_multi, tokio_tracing_multi);
 criterion_main!(benches);

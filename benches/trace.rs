@@ -65,7 +65,7 @@ fn trace_multi_thread(c: &mut Criterion) {
     c.bench_function_over_inputs(
         "per_thread_collect",
         |b, thread_cnt| {
-            b.iter_batched(|| {}, |_| {
+            b.iter(|| {
                 let (root, collector) = minitrace::trace_enable(0u32);
                 let wg = crossbeam::sync::WaitGroup::new();
 
@@ -76,7 +76,7 @@ fn trace_multi_thread(c: &mut Criterion) {
                         let mut handle = handle;
                         let _g = handle.trace_enable();
 
-                        for i in 0..10000 {
+                        for i in 0..1000 {
                             let _g = minitrace::new_span(i as u32);
                         }
                         drop(wg);
@@ -87,11 +87,16 @@ fn trace_multi_thread(c: &mut Criterion) {
 
                 drop(root);
                 let _span_sets = collector.collect();
-            }, criterion::BatchSize::NumIterations(1));
+            });
         },
         vec![4, 8, 16, 32],
     );
 }
 
-criterion_group!(benches, trace_wide_bench, trace_deep_bench, trace_multi_thread);
+criterion_group!(
+    benches,
+    trace_wide_bench,
+    trace_deep_bench,
+    trace_multi_thread
+);
 criterion_main!(benches);
