@@ -8,9 +8,9 @@ pub fn trace_enable<T: Into<u32>>(
     crate::trace_local::LocalTraceGuard,
     crate::collector::Collector,
 ) {
-    let collector = crate::collector::Collector::new();
-
     let now = crate::time::real_time_ns();
+    let collector = crate::collector::Collector::new(now);
+
     let (trace_guard, _) = crate::trace_local::LocalTraceGuard::new(
         collector.inner.clone(),
         event,
@@ -48,6 +48,6 @@ pub fn new_span<T: Into<u32>>(event: T) -> Option<crate::trace_local::SpanGuard>
 
 #[must_use]
 #[inline]
-pub fn trace_crossthread<T: Into<u32>>(event: T) -> crate::trace_crossthread::CrossthreadTrace {
-    crate::trace_crossthread::CrossthreadTrace::new(event.into())
+pub fn trace_crossthread() -> crate::trace_crossthread::CrossthreadTrace {
+    crate::trace_crossthread::CrossthreadTrace::new()
 }

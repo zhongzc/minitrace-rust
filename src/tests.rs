@@ -70,7 +70,7 @@ fn trace_basic() {
     }
 
     let spans = collector.collect();
-    let spans = rebuild_relation_by_event(spans);
+    let spans = rebuild_relation_by_event(spans.span_sets);
 
     assert_eq!(spans.len(), 2);
     assert_eq!(&spans, &[(0, None), (1, Some(0))]);
@@ -108,12 +108,12 @@ fn trace_async_basic() {
         }
 
         for i in 6..=10u32 {
-            let handle = crate::trace_crossthread(i);
+            let handle = crate::trace_crossthread();
             let wg = wg.clone();
 
             std::thread::spawn(move || {
                 let mut handle = handle;
-                let guard = handle.trace_enable();
+                let guard = handle.trace_enable(i);
                 drop(guard);
                 drop(wg);
             });
@@ -122,7 +122,7 @@ fn trace_async_basic() {
 
     wg.wait();
     let spans = collector.collect();
-    let spans = rebuild_relation_by_event(spans);
+    let spans = rebuild_relation_by_event(spans.span_sets);
 
     assert_eq!(spans.len(), 11);
     assert_eq!(
@@ -156,7 +156,7 @@ fn trace_wide_function() {
     }
 
     let spans = collector.collect();
-    let spans = rebuild_relation_by_event(spans);
+    let spans = rebuild_relation_by_event(spans.span_sets);
 
     assert_eq!(spans.len(), 11);
     assert_eq!(
@@ -196,7 +196,7 @@ fn trace_deep_function() {
     }
 
     let spans = collector.collect();
-    let spans = rebuild_relation_by_event(spans);
+    let spans = rebuild_relation_by_event(spans.span_sets);
 
     assert_eq!(spans.len(), 11);
     assert_eq!(
@@ -228,10 +228,10 @@ fn trace_collect_ahead() {
 
     let wg = crossbeam::sync::WaitGroup::new();
     let wg1 = wg.clone();
-    let handle = crate::trace_crossthread(2u32);
+    let handle = crate::trace_crossthread();
     std::thread::spawn(move || {
         let mut handle = handle;
-        let guard = handle.trace_enable();
+        let guard = handle.trace_enable(2u32);
 
         wg1.wait();
         drop(guard);
@@ -243,7 +243,7 @@ fn trace_collect_ahead() {
     let spans = collector.collect();
     drop(wg);
 
-    let spans = rebuild_relation_by_event(spans);
+    let spans = rebuild_relation_by_event(spans.span_sets);
     assert_eq!(spans.len(), 2);
     assert_eq!(&spans, &[(0, None), (1, Some(0)),]);
     check_clear();
